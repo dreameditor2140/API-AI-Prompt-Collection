@@ -50,23 +50,37 @@ app.use('/api/images', imageRoutes);
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Start server first (even if MongoDB fails, server will still run for testing)
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`API available at http://localhost:${PORT}/api`);
-    console.log(`Test endpoint: http://localhost:${PORT}/api/test`);
-});
+// Connect to MongoDB first, then start server
+const connectDB = async () => {
+    try {
+        const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-prompt-api';
+        
+        // Connection options to prevent buffering timeout
+        const options = {
+            serverSelectionTimeoutMS: 30000, // 30 seconds to select server
+            socketTimeoutMS: 45000, // 45 seconds socket timeout
+            bufferMaxEntries: 0, // Disable mongoose buffering
+            bufferCommands: false, // Disable mongoose buffering
+        };
 
-// Connect to MongoDB
-mongoose
-    .connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-prompt-api')
-    .then(() => {
+        await mongoose.connect(mongoUri, options);
         console.log('✅ Connected to MongoDB');
-    })
-    .catch((error) => {
-        console.error('⚠️  MongoDB connection error:', error.message);
-        console.log('⚠️  Server is running but database features will not work');
-    });
+        
+        // Start server only after MongoDB connection is established
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+            console.log(`API available at http://localhost:${PORT}/api`);
+            console.log(`Test endpoint: http://localhost:${PORT}/api/test`);
+        });
+    } catch (error) {
+        console.error('❌ MongoDB connection error:', error.message);
+        console.error('⚠️  Server will not start without database connection');
+        process.exit(1);
+    }
+};
+
+// Initialize database connection
+connectDB();
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
